@@ -1,196 +1,149 @@
 <!doctype html>
 <html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
-    <title>FTE Engine</title>
-    <style>
-      /* Redefinir margens e preenchimento */
-      html, body {
-        background-color: #000000;
-        color: #808080;
-        height: 100%;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <title>FTE Engine</title>
+  <style>
+    html, body {
+      background-color: #000000;
+      color: #808080;
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    #status {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      color: #ffffff;
+      visibility: hidden;
+    }
+
+    canvas.emscripten {
+      border: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading...</div>
+  <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
+
+  <script type="text/javascript">
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("fte_pwa_sw.js", { scope: "./" })
+        .catch((error) => console.error(`Service worker registration failed: ${error}`));
+    }
+
+    function str2ab(str) {
+      var buf = new ArrayBuffer(str.length);
+      var bufView = new Uint8Array(buf);
+      for (var i = 0, strLen = str.length; i < strLen; i++) {
+        bufView[i] = str.charCodeAt(i);
       }
+      return buf;
+    }
 
-      /* Esconde o "status" até que o jogo esteja carregado */
-      #status {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 20px;
-        color: #ffffff;
-        visibility: hidden; /* Esconde inicialmente */
+    async function fetchFileList() {
+      try {
+        const response = await fetch('id1/filelist.json');
+        if (!response.ok) throw new Error('Failed to fetch file list.');
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching file list:', error);
+        return {};
       }
+    }
 
-      /* Ajusta o canvas para ocupar 100% da tela */
-      canvas.emscripten {
-        border: 0;
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
+    async function fetchPakFiles() {
+      const fileList = await fetchFileList();
+      const pakFiles = [];
 
-      /* Estilo do botão ESC */
-      #escButton {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        padding: 10px;
-        background-color: rgba(0, 0, 0, 0.5); /* Botão escuro e transparente */
-        color: white;
-        font-size: 18px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        z-index: 10000; /* Para ficar acima do canvas */
-        display: block;
-      }
-
-      #escButton:active {
-        background-color: rgba(0, 0, 0, 0.8); /* Cor mais escura quando pressionado */
-      }
-    </style>
-  </head>
-  <body>
-    <!-- Status de carregamento, inicialmente escondido -->
-    <div class="emscripten" id="status">Loading...</div>
-
-    <!-- Canvas para renderizar o WASM -->
-    <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
-
-    <!-- Botão ESC -->
-    <button id="escButton">ESC</button>
-
-    <script type="text/javascript">
-      // Registra o Service Worker (caso exista)
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("fte_pwa_sw.js", { scope: "./" })
-          .catch((error) => console.error(`Service worker registration failed: ${error}`));
-      }
-
-      // Função para converter uma string em ArrayBuffer
-      function str2ab(str) {
-        var buf = new ArrayBuffer(str.length);
-        var bufView = new Uint8Array(buf);
-        for (var i = 0, strLen = str.length; i < strLen; i++) {
-          bufView[i] = str.charCodeAt(i);
+      // Iterate through file list to gather all .pak files
+      for (const [file, url] of Object.entries(fileList)) {
+        if (file.endsWith('.pak')) {
+          pakFiles.push({ file, url });
         }
-        return buf;
+      }
+      return pakFiles;
+    }
+
+    var Module = {
+      files: {},
+      autostart: true,
+      print: function(msg) { console.log(msg); },
+      printErr: function(text) { console.error(text); },
+      canvas: document.getElementById('canvas'),
+      setStatus: function(text) {
+        var statusElement = document.getElementById('status');
+        if (text) {
+          statusElement.innerHTML = text;
+          statusElement.style.visibility = 'visible';
+        } else {
+          statusElement.style.visibility = 'hidden';
+        }
+      },
+      postRun: [
+        function() {
+          console.log("Engine initialized successfully.");
+          Module.setStatus("");
+        }
+      ]
+    };
+
+    async function loadFiles() {
+      Module.setStatus('Loading files...');
+      const pakFiles = await fetchPakFiles();
+
+      // Load each pak file into the Module.files object
+      for (const { file, url } of pakFiles) {
+        Module.files[file] = url;
       }
 
-      // Configuração do módulo WASM
-      var Module = {
-        files: {
-          "id1/pak0.pak": "id1/pak0.pak",
-          "id1/pak1.pak": "id1/pak1.pak",
-          "id1/pak2.pak": "id1/pak2.pak",
-          "id1/pak3.pak": "id1/pak3.pak",
-          "id1/default.cfg": "id1/default.cfg"
-        },
-        autostart: true,
-        print: function(msg) { console.log(msg); },
-        printErr: function(text) { console.error(text); },
-        canvas: document.getElementById('canvas'),
-        setStatus: function(text) {
-          var statusElement = document.getElementById('status');
-          if (text) {
-            statusElement.innerHTML = text;
-            statusElement.style.visibility = 'visible'; // Mostra o status de carregamento
-          } else {
-            statusElement.style.visibility = 'hidden'; // Esconde o status quando o jogo terminar de carregar
-          }
-        },
-        postRun: [
-          function() {
-            console.log("Engine initialized successfully.");
-            Module.setStatus(""); // Esconde o status
-          }
-        ]
-      };
+      begin();
+    }
 
-      // Função para ajustar o tamanho do canvas para a tela do dispositivo
-      function adjustCanvasSize() {
-        var canvas = document.getElementById('canvas');
-        var width = window.innerWidth;
-        var height = window.innerHeight;
-
-        // Ajustar o tamanho real do canvas levando em conta a densidade de pixels
-        canvas.width = width * window.devicePixelRatio;
-        canvas.height = height * window.devicePixelRatio;
-        canvas.style.width = width + 'px';
-        canvas.style.height = height + 'px';
-      }
-
-      // Chama a função de ajuste de tamanho ao carregar e redimensionar a tela
-      window.addEventListener('resize', adjustCanvasSize);
-      adjustCanvasSize(); // Ajusta no primeiro carregamento
-
-      // Função para começar a inicializar o motor de jogo
-      function begin() {
-        if (Module.began) return;
-        Module.began = true;
-        Module.setStatus('Downloading...');
-
-        var script = document.createElement('script');
-        script.setAttribute('src', "ftewebgl.js");
-        script.setAttribute('type', "text/javascript");
-        script.setAttribute('charset', "utf-8");
-        script.addEventListener('error', function() {
-          alert("Error downloading engine script.");
-          Module.setStatus("Unable to download engine JavaScript");
-        }, false);
-        document.head.appendChild(script);
-      }
-
-      // Inicializar automaticamente o motor, se a configuração permitir
-      if (Module.autostart) {
-        begin();
-      }
-
-      // Função que simula pressionamento da tecla ESC
-      function simulateEscKey() {
-        var event = new KeyboardEvent('keydown', {
-          key: 'Escape',
-          code: 'Escape',
-          keyCode: 27,
-          charCode: 0,
-          bubbles: true
-        });
-        document.dispatchEvent(event);
-      }
-
-      // Adiciona um listener de clique no botão ESC
-      var escButton = document.getElementById('escButton');
-      escButton.addEventListener('click', function() {
-        // Simula a tecla ESC quando o botão é clicado
-        simulateEscKey();
-      });
-
-      // Lidar com eventos de toque corretamente
+    function adjustCanvasSize() {
       var canvas = document.getElementById('canvas');
-      canvas.addEventListener('touchstart', function(event) {
-        var rect = canvas.getBoundingClientRect();
-        var touch = event.touches[0];
-        var x = (touch.clientX - rect.left) * (canvas.width / rect.width);
-        var y = (touch.clientY - rect.top) * (canvas.height / rect.height);
-        console.log('Touch at:', x, y);
-        event.preventDefault(); // Impede ações padrão como zoom
+      var width = window.innerWidth;
+      var height = window.innerHeight;
+
+      canvas.width = width * window.devicePixelRatio;
+      canvas.height = height * window.devicePixelRatio;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+    }
+
+    window.addEventListener('resize', adjustCanvasSize);
+    adjustCanvasSize();
+
+    function begin() {
+      if (Module.began) return;
+      Module.began = true;
+      Module.setStatus('Downloading...');
+
+      var script = document.createElement('script');
+      script.setAttribute('src', "ftewebgl.js");
+      script.setAttribute('type', "text/javascript");
+      script.setAttribute('charset', "utf-8");
+      script.addEventListener('error', function() {
+        alert("Error downloading engine script.");
+        Module.setStatus("Unable to download engine JavaScript");
       }, false);
+      document.head.appendChild(script);
+    }
 
-      // Fechar o Cordova quando o jogador sair da página
-      window.addEventListener('beforeunload', function() {
-        if (typeof cordova !== 'undefined') {
-          // Para dispositivos Cordova, fechar o app quando sair da página
-          navigator.app.exitApp();
-        }
-      });
-    </script>
-  </body>
+    if (Module.autostart) {
+      loadFiles();
+    }
+  </script>
+</body>
 </html>
-
