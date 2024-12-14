@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en-us">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <title>FTE Engine</title>
+  <style>
+    html, body {
+      background-color: #000000;
+      color: #808080;
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    #status {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      color: #ffffff;
+      visibility: hidden;
+    }
+
+    canvas.emscripten {
+      border: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      z-index: 10000;
+    }
+
+    .control-button {
+      padding: 8px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .control-button:active {
+      background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    #arrow {
+      position: absolute;
+      bottom: 50px;
+      right: 10px;
+      width: 40px;
+      height: 40px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      font-size: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    #arrow:active {
+      background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    #hiddenInput {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      height: 1px;
+      width: 1px;
+      z-index: -1;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading...</div>
+  <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
+
+  <div id="controls">
+    <button id="escButton" class="control-button">ESC</button>
+    <button id="keyboardButton" class="control-button">Keyboard</button>
+  </div>
+
+  <div id="arrow">&gt;</div>
+  <input id="hiddenInput" type="text" />
+
+  <script type="text/javascript">
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("fte_pwa_sw.js", { scope: "./" })
+        .catch((error) => console.error(`Service worker registration failed: ${error}`));
+    }
+
+    function str2ab(str) {
+      var buf = new ArrayBuffer(str.length);
+      var bufView = new Uint8Array(buf);
+      for (var i = 0, strLen = str.length; i < strLen; i++) {
+        bufView[i] = str.charCodeAt(i);
+      }
+      return buf;
+    }
+
+    var Module = {
+      files: {
+        "id1/pak0.pak": "id1/pak0.pak",
+        "id1/pak1.pak": "id1/pak1.pak",
+        "id1/pak2.pak": "id1/pak2.pak",
+        "id1/pak3.pak": "id1/pak3.pak",
+        "id1/default.cfg": "id1/default.cfg"
+      },
+      autostart: true,
+      print: function(msg) { console.log(msg); },
+      printErr: function(text) { console.error(text); },
+      canvas: document.getElementById('canvas'),
+      setStatus: function(text) {
+        var statusElement = document.getElementById('status');
+        if (text) {
+          statusElement.innerHTML = text;
+          statusElement.style.visibility = 'visible';
+        } else {
+          statusElement.style.visibility = 'hidden';
+        }
+      },
+      postRun: [
+        function() {
+          console.log("Engine initialized successfully.");
+          Module.setStatus("");
+        }
+      ]
+    };
+
+    function adjustCanvasSize() {
+      var canvas = document.getElementById('canvas');
+      var width = window.innerWidth;
+      var height = window.innerHeight;
+
+      canvas.width = width * window.devicePixelRatio;
+      canvas.height = height * window.devicePixelRatio;
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+    }
+
+    window.addEventListener('resize', adjustCanvasSize);
+    adjustCanvasSize();
+
+    function begin() {
+      if (Module.began) return;
+      Module.began = true;
+      Module.setStatus('Downloading...');
+
+      var script = document.createElement('script');
+      script.setAttribute('src', "ftewebgl.js");
+      script.setAttribute('type', "text/javascript");
+      script.setAttribute('charset', "utf-8");
+      script.addEventListener('error', function() {
+        alert("Error downloading engine script.");
+        Module.setStatus("Unable to download engine JavaScript");
+      }, false);
+      document.head.appendChild(script);
+    }
+
+    if (Module.autostart) {
+      begin();
+    }
+
+    function simulateEscKey() {
+      var event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        code: 'Escape',
+        keyCode: 27,
+        charCode: 0,
+        bubbles: true
+      });
+      document.dispatchEvent(event);
+    }
+
+    var escButton = document.getElementById('escButton');
+    escButton.addEventListener('click', simulateEscKey);
+
+    var hiddenInput = document.getElementById('hiddenInput');
+    var keyboardButton = document.getElementById('keyboardButton');
+
+    keyboardButton.addEventListener('click', function() {
+      hiddenInput.style.zIndex = 10000; // Bring it above other elements
+      hiddenInput.focus();
+    });
+
+    hiddenInput.addEventListener('input', function(event) {
+      var inputText = hiddenInput.value;
+      if (inputText.length > 0) {
+        var keyEvent = new KeyboardEvent('keydown', {
+          key: inputText[inputText.length - 1],
+          code: 'Key' + inputText[inputText.length - 1].toUpperCase(),
+          bubbles: true
+        });
+        document.dispatchEvent(keyEvent);
+        hiddenInput.value = '';
+      }
+    });
+
+    var arrow = document.getElementById('arrow');
+    arrow.addEventListener('click', function() {
+      console.log('Arrow button clicked');
+    });
+
+    window.addEventListener('beforeunload', function() {
+      if (typeof cordova !== 'undefined') {
+        navigator.app.exitApp();
+      }
+    });
+
+    var canvas = document.getElementById('canvas');
+    canvas.addEventListener('touchstart', function(event) {
+      var rect = canvas.getBoundingClientRect();
+      var touch = event.touches[0];
+      var x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+      var y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+      console.log('Touch at:', x, y);
+      event.preventDefault();
+    }, false);
+  </script>
+</body>
+</html>
+
