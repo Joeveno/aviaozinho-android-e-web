@@ -63,6 +63,19 @@
       }
     }
 
+    async function fetchPakFiles() {
+      const fileList = await fetchFileList();
+      const pakFiles = [];
+
+      // Iterate through file list to gather all .pak files
+      for (const [file, url] of Object.entries(fileList)) {
+        if (file.endsWith('.pak')) {
+          pakFiles.push({ file, url });
+        }
+      }
+      return pakFiles;
+    }
+
     var Module = {
       files: {},
       autostart: true,
@@ -88,10 +101,11 @@
 
     async function loadFiles() {
       Module.setStatus('Loading files...');
-      const fileList = await fetchFileList();
+      const pakFiles = await fetchPakFiles();
 
-      for (const [key, value] of Object.entries(fileList)) {
-        Module.files[key] = value;
+      // Load each pak file into the Module.files object
+      for (const { file, url } of pakFiles) {
+        Module.files[file] = url;
       }
 
       begin();
