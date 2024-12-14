@@ -31,11 +31,73 @@
       width: 100%;
       height: 100%;
     }
+
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      z-index: 10000;
+    }
+
+    .control-button {
+      padding: 8px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .control-button:active {
+      background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    #arrow {
+      position: absolute;
+      bottom: 50px;
+      right: 10px;
+      width: 40px;
+      height: 40px;
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      font-size: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    #arrow:active {
+      background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    #hiddenInput {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      height: 1px;
+      width: 1px;
+      z-index: -1;
+    }
   </style>
 </head>
 <body>
   <div id="status">Loading...</div>
   <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
+
+  <div id="controls">
+    <button id="escButton" class="control-button">ESC</button>
+    <button id="keyboardButton" class="control-button">Keyboard</button>
+  </div>
+
+  <div id="arrow">&gt;</div>
+  <input id="hiddenInput" type="text" />
 
   <script type="text/javascript">
     if ("serviceWorker" in navigator) {
@@ -52,32 +114,14 @@
       return buf;
     }
 
-    async function fetchFileList() {
-      try {
-        const response = await fetch('id1/filelist.json');
-        if (!response.ok) throw new Error('Failed to fetch file list.');
-        return await response.json();
-      } catch (error) {
-        console.error('Error fetching file list:', error);
-        return {};
-      }
-    }
-
-    async function fetchPakFiles() {
-      const fileList = await fetchFileList();
-      const pakFiles = [];
-
-      // Iterate through file list to gather all .pak files
-      for (const [file, url] of Object.entries(fileList)) {
-        if (file.endsWith('.pak')) {
-          pakFiles.push({ file, url });
-        }
-      }
-      return pakFiles;
-    }
-
     var Module = {
-      files: {},
+      files: {
+        "id1/pak0.pak": "id1/pak0.pak",
+        "id1/pak1.pak": "id1/pak1.pak",
+        "id1/pak2.pak": "id1/pak2.pak",
+        "id1/pak3.pak": "id1/pak3.pak",
+        "id1/default.cfg": "id1/default.cfg"
+      },
       autostart: true,
       print: function(msg) { console.log(msg); },
       printErr: function(text) { console.error(text); },
@@ -98,18 +142,6 @@
         }
       ]
     };
-
-    async function loadFiles() {
-      Module.setStatus('Loading files...');
-      const pakFiles = await fetchPakFiles();
-
-      // Load each pak file into the Module.files object
-      for (const { file, url } of pakFiles) {
-        Module.files[file] = url;
-      }
-
-      begin();
-    }
 
     function adjustCanvasSize() {
       var canvas = document.getElementById('canvas');
@@ -142,8 +174,65 @@
     }
 
     if (Module.autostart) {
-      loadFiles();
+      begin();
     }
+
+    function simulateEscKey() {
+      var event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        code: 'Escape',
+        keyCode: 27,
+        charCode: 0,
+        bubbles: true
+      });
+      document.dispatchEvent(event);
+    }
+
+    var escButton = document.getElementById('escButton');
+    escButton.addEventListener('click', simulateEscKey);
+
+    var hiddenInput = document.getElementById('hiddenInput');
+    var keyboardButton = document.getElementById('keyboardButton');
+
+    keyboardButton.addEventListener('click', function() {
+      hiddenInput.style.zIndex = 10000; // Bring it above other elements
+      hiddenInput.focus();
+    });
+
+    hiddenInput.addEventListener('input', function(event) {
+      var inputText = hiddenInput.value;
+      if (inputText.length > 0) {
+        var keyEvent = new KeyboardEvent('keydown', {
+          key: inputText[inputText.length - 1],
+          code: 'Key' + inputText[inputText.length - 1].toUpperCase(),
+          bubbles: true
+        });
+        document.dispatchEvent(keyEvent);
+        hiddenInput.value = '';
+      }
+    });
+
+    var arrow = document.getElementById('arrow');
+    arrow.addEventListener('click', function() {
+      console.log('Arrow button clicked');
+    });
+
+    window.addEventListener('beforeunload', function() {
+      if (typeof cordova !== 'undefined') {
+        navigator.app.exitApp();
+      }
+    });
+
+    var canvas = document.getElementById('canvas');
+    canvas.addEventListener('touchstart', function(event) {
+      var rect = canvas.getBoundingClientRect();
+      var touch = event.touches[0];
+      var x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+      var y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+      console.log('Touch at:', x, y);
+      event.preventDefault();
+    }, false);
   </script>
 </body>
 </html>
+
