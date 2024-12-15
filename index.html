@@ -67,11 +67,6 @@
   </div>
 
   <script type="text/javascript">
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("fte_pwa_sw.js", { scope: "./" })
-        .catch((error) => console.error(`Service worker registration failed: ${error}`));
-    }
-
     var Module = {
       files: {},
       autostart: true,
@@ -162,11 +157,11 @@
     }
 
     // Joystick touch/mouse events
-    joystick.addEventListener('touchstart', onStart, false);
     joystick.addEventListener('mousedown', onStart, false);
+    joystick.addEventListener('touchstart', onStart, false);
 
     function onStart(e) {
-      e.preventDefault(); // Prevent default actions for touch/mouse
+      e.preventDefault();
       e.stopPropagation();
 
       const rect = joystick.getBoundingClientRect();
