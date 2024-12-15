@@ -30,6 +30,7 @@
       display: block;
       width: 100%;
       height: 100%;
+      position: absolute;
     }
 
     #joystick {
@@ -41,6 +42,7 @@
       background: rgba(255, 255, 255, 0.2);
       border-radius: 50%;
       touch-action: none;
+      z-index: 10;
     }
 
     #joystick-handle {
@@ -164,6 +166,9 @@
     joystick.addEventListener('mousedown', onStart, false);
 
     function onStart(e) {
+      e.preventDefault(); // Prevent default actions for touch/mouse
+      e.stopPropagation();
+
       const rect = joystick.getBoundingClientRect();
       joystickCenter.x = rect.left + rect.width / 2;
       joystickCenter.y = rect.top + rect.height / 2;
@@ -192,6 +197,9 @@
     }
 
     function onEnd(moveHandler, e) {
+      e.preventDefault();
+      e.stopPropagation();
+
       document.removeEventListener('mousemove', moveHandler, false);
       document.removeEventListener('mouseup', onEnd, false);
       document.removeEventListener('touchmove', moveHandler, false);
