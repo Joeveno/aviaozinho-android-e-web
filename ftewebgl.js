@@ -5067,288 +5067,109 @@ var FTEC = {
 		jorientation: 0,
 		wantfullscreen: 0,
 		frame: 0
-	},
-	loadurl: function(url, mime, arraybuf) {
-		if (FTEC.evcb.loadfile != 0) {
-			let handle = -1;
-			if (arraybuf !== undefined) handle = _emscriptenfte_buf_createfromarraybuf(arraybuf);
-			let blen = lengthBytesUTF8(url) + 1;
-			let urlptr = _malloc(blen);
-			stringToUTF8(url, urlptr, blen);
-			blen = lengthBytesUTF8(mime) + 1;
-			let mimeptr = _malloc(blen);
-			stringToUTF8(mime, mimeptr, blen);
-			wasmTable.get(FTEC.evcb.loadfile)(urlptr, mimeptr, handle);
-			_free(mimeptr);
-			_free(urlptr);
-			window.focus()
-		}
-	},
-	cbufadd: function(command) {
-		if (FTEC.evcb.cbufaddtext != 0) {
-			let blen = lengthBytesUTF8(command) + 1;
-			let ptr = _malloc(blen);
-			stringToUTF8(command, ptr, blen);
-			wasmTable.get(FTEC.evcb.cbufaddtext)(ptr);
-			_free(ptr);
-			window.focus()
-		}
-	},
-	step: function(timestamp) {
-		if (FTEC.aborted) return;
-		if (FTEC.dovsync) Browser.requestAnimationFrame(FTEC.step);
-		else setTimeout(FTEC.step, 0, performance.now());
-		if (FTEC.xrsession) return;
-		try {
-			FTEC.dovsync = wasmTable.get(FTEC.evcb.frame)(timestamp)
-		} catch (err) {
-			console.log(err)
-		}
-	},
-	doxrframe: function(timestamp, frame) {
-		if (FTEC.aborted || FTEC.xrsession == null) return;
-		FTEC.xrsession.requestAnimationFrame(FTEC.doxrframe);
-		FTEC.xrframe = frame;
-		try {
-			FTEC.dovsync = wasmTable.get(FTEC.evcb.frame)(timestamp)
-		} catch (err) {
-			console.log(err)
-		}
-		FTEC.xrframe = null
-	},
-	handleevent: function(event) {
-		switch (event.type) {
-			case "message":
-				console.log(event);
-				console.log(event.data);
-				FTEC.loadurl(event.data.url, event.data.cmd, undefined);
-				break;
-			case "resize":
-				if (FTEC.evcb.resize != 0) {
-					wasmTable.get(FTEC.evcb.resize)(Module["canvas"].width, Module["canvas"].height)
-				}
-				break;
-			case "mousemove":
-				if (FTEC.evcb.mouse != 0) {
-					if (Browser.pointerLock) {
-						if (typeof event.movementX === "undefined") {
-							event.movementX = event.mozMovementX;
-							event.movementY = event.mozMovementY
-						}
-						if (typeof event.movementX === "undefined") {
-							event.movementX = event.webkitMovementX;
-							event.movementY = event.webkitMovementY
-						}
-						wasmTable.get(FTEC.evcb.mouse)(0, false, event.movementX, event.movementY, 0, 0)
-					} else {
-						var rect = Module["canvas"].getBoundingClientRect();
-						wasmTable.get(FTEC.evcb.mouse)(0, true, (event.clientX - rect.left) * (Module["canvas"].width / rect.width), (event.clientY - rect.top) * (Module["canvas"].height / rect.height), 0, 0)
-					}
-				}
-				break;
-			case "mousedown":
-				window.focus();
-				if (FTEC.pointerwantlock != 0 && FTEC.pointerislocked == 0) {
-					var v;
-					try {
-						FTEC.pointerislocked = -1;
-						v = Module["canvas"].requestPointerLock({
-							unadjustedMovement: true
-						});
-						if (v !== undefined) {
-							v.catch(e => {
-								if (e.name == "NotSupportedError") {
-									Module["canvas"].requestPointerLock().then(() => {
-										console.log("Shitty browser forces mouse accel. Expect a shit experience.")
-									}).catch(() => {
-										console.log("Your defective browser forces can't handle mouse look. Expect a truely dire experience. Give up now.")
-									})
-								} else console.log("Your defective browser forces can't handle mouse look. Expect a truely dire experience. Give up now.")
-							})
-						}
-					} catch (e) {
-						try {
-							Module["canvas"].requestPointerLock();
-							console.log("Your shitty browser doesn't support disabling mouse acceleration.")
-						} catch (e) {
-							console.log("Your shitty browser doesn't support mouse grabs.");
-							FTEC.pointerislocked = -1
-						}
-					}
-				}
-				if (!document.fullscreenElement)
-					if (FTEC.evcb.wantfullscreen != 0)
-						if (wasmTable.get(FTEC.evcb.wantfullscreen)()) {
-							try {
-								Module["canvas"].requestFullscreen()
-							} catch (e) {
-								console.log("requestFullscreen:");
-								console.log(e)
-							}
-						}
-			case "mouseup":
-				if (FTEC.evcb.button != 0) {
-					wasmTable.get(FTEC.evcb.button)(0, event.type == "mousedown", event.button);
-					event.preventDefault()
-				}
-				break;
-			case "mousewheel":
-			case "wheel":
-				if (FTEC.evcb.button != 0) {
-					wasmTable.get(FTEC.evcb.button)(0, 2, event.deltaY);
-					event.preventDefault()
-				}
-				break;
-			case "mouseout":
-				if (FTEC.evcb.button != 0) {
-					for (let i = 0; i < 8; i++) wasmTable.get(FTEC.evcb.button)(0, false, i)
-				}
-				if (FTEC.pointerislocked == -1) FTEC.pointerislocked = 0;
-				break;
-			case "visibilitychange":
-				try {
-					if (!FTEC.wakelock && navigator.wakeLock && document.visibilityState === "visible") navigator.wakeLock.request("screen").then(value => {
-						FTEC.wakelock = value;
-						value.addEventListener("release", () => {
-							FTEC.wakelock = null
-						})
-					}).catch(() => {})
-				} catch (e) {
-					console.log(e)
-				}
-				break;
-			case "focus":
-			case "blur":
-				wasmTable.get(FTEC.evcb.key)(0, false, 16, 0);
-				wasmTable.get(FTEC.evcb.key)(0, false, 17, 0);
-				wasmTable.get(FTEC.evcb.key)(0, false, 18, 0);
-				if (FTEC.pointerislocked == -1) FTEC.pointerislocked = 0;
-				break;
-			case "keypress":
-				if (FTEC.evcb.key != 0) {
-					if (event.charCode >= 122 && event.charCode <= 123) break;
-					wasmTable.get(FTEC.evcb.key)(0, 1, 0, event.charCode);
-					wasmTable.get(FTEC.evcb.key)(0, 0, 0, event.charCode);
-					event.preventDefault();
-					event.stopPropagation()
-				}
-				break;
-			case "keydown":
-			case "keyup":
-				if (FTEC.evcb.key != 0 && event.keyCode != 122) {
-					const codepoint = event.key.codePointAt(1) ? 0 : event.key.codePointAt(0);
-					if (codepoint < " ") codepoint = 0;
-					if (wasmTable.get(FTEC.evcb.key)(0, event.type == "keydown", event.keyCode, codepoint)) event.preventDefault()
-				}
-				break;
-case "touchmove":
-case "touchstart":
-case "touchend":
-case "touchcancel":
-case "touchleave":
-    event.preventDefault();
-    const touches = event.changedTouches;
-    for (let i = 0; i < touches.length; i++) {
-        const t = touches[i];
+	function _emscriptenfte_setupcanvas(nw, nh, evresize, evmouse, evmbutton, evkey, evfile, evcbufadd, evjbutton, evjaxis, evjorientation, evwantfullscreen) {
+    var ctx = Browser.createContext(Module["canvas"], true, true, {});
+    if (ctx == null) return;
 
-        // Adicionando normalização das coordenadas para evitar o deslocamento
-        const rect = Module["canvas"].getBoundingClientRect();
-        const normX = (t.clientX - rect.left) * (Module["canvas"].width / rect.width);
-        const normY = (t.clientY - rect.top) * (Module["canvas"].height / rect.height);
+    // Funções para desenhar os controles
+    const buttonWidth = 80;
+    const buttonHeight = 80;
+    const joystickRadius = 60;
+    const buttonOffset = 30;
+    let joystickX = 100;
+    let joystickY = ctx.canvas.height - 100;
+    let joystickOffsetX = 0;
+    let joystickOffsetY = 0;
 
-        // Usar as coordenadas normalizadas para os toques
-        if (FTEC.evcb.mouse) wasmTable.get(FTEC.evcb.mouse)(t.identifier + 1, true, normX, normY, 0, Math.sqrt(t.radiusX * t.radiusX + t.radiusY * t.radiusY));
+    // Função para desenhar o joystick
+    function drawJoystick(ctx) {
+        ctx.beginPath();
+        ctx.arc(joystickX, joystickY, joystickRadius, 0, Math.PI * 2, false);
+        ctx.fillStyle = 'rgba(0, 0, 255, 0.3)';
+        ctx.fill();
+        ctx.strokeStyle = 'blue';
+        ctx.lineWidth = 5;
+        ctx.stroke();
 
-        if (FTEC.evcb.button) {
-            if (event.type == "touchstart") wasmTable.get(FTEC.evcb.button)(t.identifier + 1, 1, -1);
-            else if (event.type != "touchmove") wasmTable.get(FTEC.evcb.button)(t.identifier + 1, 0, -1)
+        ctx.beginPath();
+        ctx.arc(joystickX + joystickOffsetX, joystickY + joystickOffsetY, 20, 0, Math.PI * 2, false);
+        ctx.fillStyle = 'blue';
+        ctx.fill();
+    }
+
+    // Função para desenhar botões
+    function drawButton(ctx, x, y, label) {
+        ctx.beginPath();
+        ctx.rect(x, y, buttonWidth, buttonHeight);
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.stroke();
+        ctx.fillStyle = 'white';
+        ctx.font = '16px Arial';
+        ctx.fillText(label, x + buttonWidth / 2 - ctx.measureText(label).width / 2, y + buttonHeight / 2 + 8);
+    }
+
+    // Função para desenhar todos os controles
+    function drawControls(ctx) {
+        drawJoystick(ctx);
+        drawButton(ctx, ctx.canvas.width - buttonWidth - buttonOffset, ctx.canvas.height - buttonHeight * 2 - buttonOffset, 'FIRE');
+        drawButton(ctx, ctx.canvas.width - buttonWidth - buttonOffset, ctx.canvas.height - buttonHeight - buttonOffset, 'MENU');
+        drawButton(ctx, ctx.canvas.width - buttonWidth - buttonOffset, ctx.canvas.height - buttonHeight * 3 - buttonOffset, 'BACK');
+    }
+
+    drawControls(ctx); // Chama a função para desenhar os controles
+
+    // Função de evento de toque (adaptada)
+    function handleTouch(event) {
+        const touches = event.changedTouches;
+        for (let i = 0; i < touches.length; i++) {
+            const t = touches[i];
+            const rect = Module["canvas"].getBoundingClientRect();
+            const normX = (t.clientX - rect.left) * (Module["canvas"].width / rect.width);
+            const normY = (t.clientY - rect.top) * (Module["canvas"].height / rect.height);
+
+            // Checar se o toque está no joystick
+            const dx = normX - joystickX;
+            const dy = normY - joystickY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < joystickRadius) {
+                joystickOffsetX = dx;
+                joystickOffsetY = dy;
+                // Enviar evento de movimento para o jogo
+                wasmTable.get(FTEC.evcb.mouse)(0, true, normX, normY, 0, 0);
+            }
+
+            // Checar se o toque está no botão FIRE
+            if (normX >= ctx.canvas.width - buttonWidth - buttonOffset && normX <= ctx.canvas.width - buttonOffset && normY >= ctx.canvas.height - buttonHeight * 2 - buttonOffset && normY <= ctx.canvas.height - buttonHeight - buttonOffset) {
+                // Enviar evento de tiro para o jogo
+                wasmTable.get(FTEC.evcb.button)(1, 1, -1);
+            }
+
+            // Checar se o toque está no botão MENU
+            if (normX >= ctx.canvas.width - buttonWidth - buttonOffset && normX <= ctx.canvas.width - buttonOffset && normY >= ctx.canvas.height - buttonHeight - buttonOffset && normY <= ctx.canvas.height - buttonHeight + buttonOffset) {
+                // Enviar evento de abrir menu para o jogo
+                wasmTable.get(FTEC.evcb.button)(2, 1, -1);  // Exemplo de ação para menu
+            }
+
+            // Checar se o toque está no botão BACK
+            if (normX >= ctx.canvas.width - buttonWidth - buttonOffset && normX <= ctx.canvas.width - buttonOffset && normY >= ctx.canvas.height - buttonHeight * 3 - buttonOffset && normY <= ctx.canvas.height - buttonHeight * 2 - buttonOffset) {
+                // Enviar evento de voltar para o jogo
+                wasmTable.get(FTEC.evcb.button)(3, 1, -1);  // Exemplo de ação de voltar
+            }
         }
     }
-    break;
-			case "dragenter":
-			case "dragover":
-				event.stopPropagation();
-				event.preventDefault();
-				break;
-			case "drop":
-				event.stopPropagation();
-				event.preventDefault();
-				let files = event.dataTransfer.files;
-				for (let i = 0; i < files.length; i++) {
-					const file = files[i];
-					const reader = new FileReader;
-					reader.onload = function(evt) {
-						FTEC.loadurl(files[i].name, "", evt.target.result)
-					};
-					reader.readAsArrayBuffer(file)
-				}
-				break;
-			case "gamepadconnected": {
-				const gp = event.gamepad;
-				if (FTEH.gamepads === undefined) FTEH.gamepads = [];
-				FTEH.gamepads[gp.index] = gp;
-				console.log("Gamepad connected at index %d: %s. %d buttons, %d axes.", gp.index, gp.id, gp.buttons.length, gp.axes.length)
-			}
-			break;
-			case "gamepaddisconnected": {
-				const gp = event.gamepad;
-				delete FTEH.gamepads[gp.index];
-				if (FTEC.evcb.jaxis)
-					for (let j = 0; j < 6; j += 1) wasmTable.get(FTEC.evcb.jaxis)(gp.index, j, 0, true);
-				if (FTEC.evcb.jbutton)
-					for (let j = 0; j < 32 + 4; j += 1) wasmTable.get(FTEC.evcb.jbutton)(gp.index, j, 0, true);
-				console.log("Gamepad disconnected from index %d: %s", gp.index, gp.id)
-			}
-			break;
-			case "pointerlockerror":
-			case "pointerlockchange":
-			case "mozpointerlockchange":
-			case "webkitpointerlockchange":
-				FTEC.pointerislocked = document.pointerLockElement === Module["canvas"] || document.mozPointerLockElement === Module["canvas"] || document.webkitPointerLockElement === Module["canvas"];
-				break;
-			case "beforeunload":
-				event.preventDefault();
-				return "quit this game like everything else?";
-			default:
-				console.log(event);
-				break
-		}
-	}
-};
 
-function _emscriptenfte_setupcanvas(nw, nh, evresize, evmouse, evmbutton, evkey, evfile, evcbufadd, evjbutton, evjaxis, evjorientation, evwantfullscreen) {
-	try {
-		FTEC.evcb.resize = evresize;
-		FTEC.evcb.mouse = evmouse;
-		FTEC.evcb.button = evmbutton;
-		FTEC.evcb.key = evkey;
-		FTEC.evcb.loadfile = evfile;
-		FTEC.evcb.cbufaddtext = evcbufadd;
-		FTEC.evcb.jbutton = evjbutton;
-		FTEC.evcb.jaxis = evjaxis;
-		FTEC.evcb.jorientation = evjorientation;
-		FTEC.evcb.wantfullscreen = evwantfullscreen;
-		if ("GamepadEvent" in window) FTEH.gamepads = [];
-		if (!FTEC.donecb) {
-			FTEC.donecb = 1;
-			var events = ["mousedown", "mouseup", "mousemove", "wheel", "mousewheel", "mouseout", "keypress", "keydown", "keyup", "touchstart", "touchend", "touchcancel", "touchleave", "touchmove", "dragenter", "dragover", "drop", "message", "resize", "pointerlockerror", "pointerlockchange", "mozpointerlockchange", "webkitpointerlockchange", "focus", "blur"];
-			events.forEach(function(event) {
-				Module["canvas"].addEventListener(event, FTEC.handleevent, {
-					capture: true,
-					passive: false
-				})
-			});
-			var docevents = ["keypress", "keydown", "keyup", "pointerlockerror", "pointerlockchange", "mozpointerlockchange", "webkitpointerlockchange", "visibilitychange"];
-			docevents.forEach(function(event) {
-				document.addEventListener(event, FTEC.handleevent, true)
-			});
-			var windowevents = ["message", "gamepadconnected", "gamepaddisconnected", "beforeunload", "focus", "blur"];
-			windowevents.forEach(function(event) {
-				window.addEventListener(event, FTEC.handleevent, true)
-			})
-		}
-		var ctx = Browser.createContext(Module["canvas"], true, true, {});
-		if (ctx == null) {
+    // Registrar os eventos de toque
+    var events = ["touchstart", "touchmove", "touchend", "touchcancel", "touchleave"];
+    events.forEach(function(event) {
+        Module["canvas"].addEventListener(event, handleTouch, {
+            capture: true,
+            passive: false
+        });
+    });
+}
+
 			var msg = "Unable to set up webgl context.\n\nPlease use a browser that supports it and has it enabled\nYour graphics drivers may also be blacklisted, so try updating those too. woo, might as well update your entire operating system while you're at it.\nIt'll be expensive, but hey, its YOUR money, not mine.\nYou can probably just disable the blacklist, but please don't moan at me when your computer blows up, seriously, make sure those drivers are not too buggy.\nI knew a guy once. True story. Boring, but true.\nYou're probably missing out on something right now. Don't you just hate it when that happens?\nMeh, its probably just tinkertoys, right?\n\nYou know, you could always try Internet Explorer, you never know, hell might have frozen over.\nDon't worry, I wasn't serious.\n\nTum te tum. Did you get it working yet?\nDude, fix it already.\n\nThis message was brought to you by Sleep Deprivation, sponsoring quake since I don't know when";
 			if (FTEC.ctxwarned == 0) {
 				FTEC.ctxwarned = 1;
