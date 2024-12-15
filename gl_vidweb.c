@@ -675,126 +675,124 @@ qboolean GLVID_Init (rendererstate_t *info, unsigned char *palette)
 	return true;
 }
 
-void GLVID_DeInit (void)
-{
-	vid.activeapp = false;
+void GLVID_DeInit(void) {
+    vid.activeapp = false;
 
-	emscriptenfte_setupcanvas(-1, -1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    // Reset canvas settings
+    emscriptenfte_setupcanvas(-1, -1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
-	GL_ForgetPointers();
-}
-
-
-void GLVID_SwapBuffers (void)
-{
-	//webgl doesn't support swapbuffers.
-	//you can't use it for loading screens.
-	//such things must result in waiting until the following frame.
-	//although there IS a swapped-buffers event, which we should probably use in preference to requestanimationframe or whatever the call is.
-
-/*
-	if (!vid_isfullscreen)
-	{
-		if (!in_windowed_mouse.value)
-		{
-			if (mouseactive)
-			{
-				IN_DeactivateMouse ();
-			}
-		}
-		else
-		{
-			if ((key_dest == key_game||mouseusedforgui) && vid.activeapp)
-				IN_ActivateMouse ();
-			else if (!(key_dest == key_game || mouseusedforgui) || !vid.activeapp)
-				IN_DeactivateMouse ();
-		}
-	}
-*/
+    GL_ForgetPointers();
 }
 
-qboolean GLVID_ApplyGammaRamps (unsigned int gammarampsize, unsigned short *ramps)
-{
-	gammaworks = false;
-	return gammaworks;
+void GLVID_SwapBuffers(void) {
+    // WebGL doesn't support swapbuffers explicitly. This function is a placeholder.
+    // Loading screens or similar must wait until the next frame.
 }
 
-void GLVID_SetCaption(const char *text)
-{
-	emscriptenfte_settitle(text);
+qboolean GLVID_ApplyGammaRamps(unsigned int gammarampsize, unsigned short *ramps) {
+    gammaworks = false;
+    return gammaworks;
 }
 
-void Sys_SendKeyEvents(void)
-{
-	/*most callbacks happen outside our code, we don't need to poll for events - except for joysticks*/
-	qboolean shouldbefree = Key_MouseShouldBeFree();
-	emscriptenfte_updatepointerlock(in_windowed_mouse.ival && !shouldbefree, shouldbefree);
-	emscriptenfte_polljoyevents();
-
-	IN_GamePadButtonRepeats();
-}
-/*various stuff for joysticks, which we don't support in this port*/
-void INS_Shutdown (void)
-{
-}
-void INS_ReInit (void)
-{
-}
-void INS_Move(void)
-{
-}
-void INS_Init (void)
-{
-	//mneh, handy enough
-	R_RegisterVRDriver(NULL, &webxrfuncs);
-}
-void INS_Accumulate(void)
-{
-}
-void INS_Commands (void)
-{
-}
-void INS_EnumerateDevices(void *ctx, void(*callback)(void *ctx, const char *type, const char *devicename, unsigned int *qdevid))
-{
-	size_t i;
-	char foobar[64];
-	for (i = 0; i < countof(gamepaddevices); i++)
-	{
-		Q_snprintfz(foobar, sizeof(foobar), "gp%i", (int)i);
-		callback(ctx, "gamepad", foobar, &gamepaddevices[i].id);
-	}
-	for (i = 0; i < countof(mouseid); i++)
-	{
-		Q_snprintfz(foobar, sizeof(foobar), "m%i", (int)i);
-		callback(ctx, "mouse", foobar, &mouseid[i]);
-	}
-	for (i = 0; i < countof(keyboardid); i++)
-	{
-		Q_snprintfz(foobar, sizeof(foobar), "kb%i", (int)i);
-		callback(ctx, "keyboard", foobar, &keyboardid[i]);
-	}
+void GLVID_SetCaption(const char *text) {
+    emscriptenfte_settitle(text);
 }
 
-enum controllertype_e INS_GetControllerType(int id)
-{
-	size_t i;
-	for (i = 0; i < countof(gamepaddevices); i++)
-	{
-		if (id == gamepaddevices[i].id)
-			return CONTROLLER_UNKNOWN;	//browsers don't really like providing more info, to thwart fingerprinting. shame. you should just use generic glyphs.
-	}
-	return CONTROLLER_NONE;	//nuffin here. yay fingerprinting?
-}
-void INS_Rumble(int joy, quint16_t amp_low, quint16_t amp_high, quint32_t duration)
-{
-}
-void INS_RumbleTriggers(int joy, quint16_t left, quint16_t right, quint32_t duration)
-{
-}
-void INS_SetLEDColor(int id, vec3_t color)
-{
-}
-void INS_SetTriggerFX(int id, const void *data, size_t size)
-{
+void Sys_SendKeyEvents(void) {
+    // Manage pointer lock and joystick events
+    qboolean shouldbefree = Key_MouseShouldBeFree();
+    emscriptenfte_updatepointerlock(in_windowed_mouse.ival && !shouldbefree, shouldbefree);
+    emscriptenfte_polljoyevents();
+
+    // Simulate gamepad input for WASD movement
+    GamePad_ToWASD();
+
+    IN_GamePadButtonRepeats();
 }
 
+// Helper function to map joystick to WASD keys
+void GamePad_ToWASD(void) {
+    int i;
+    for (i = 0; i < countof(gamepaddevices); i++) {
+        if (!gamepaddevices[i].connected) continue;
+
+        float x = gamepaddevices[i].axes[0]; // Horizontal axis
+        float y = gamepaddevices[i].axes[1]; // Vertical axis
+
+        // Threshold to filter small joystick movements
+        float threshold = 0.2f;
+
+        if (x < -threshold) Key_Event(K_A, true);
+        else Key_Event(K_A, false);
+
+        if (x > threshold) Key_Event(K_D, true);
+        else Key_Event(K_D, false);
+
+        if (y < -threshold) Key_Event(K_W, true);
+        else Key_Event(K_W, false);
+
+        if (y > threshold) Key_Event(K_S, true);
+        else Key_Event(K_S, false);
+    }
+}
+
+void INS_Shutdown(void) {
+}
+
+void INS_ReInit(void) {
+}
+
+void INS_Move(void) {
+}
+
+void INS_Init(void) {
+    // Register VR driver (if applicable)
+    R_RegisterVRDriver(NULL, &webxrfuncs);
+}
+
+void INS_Accumulate(void) {
+}
+
+void INS_Commands(void) {
+}
+
+void INS_EnumerateDevices(void *ctx, void(*callback)(void *ctx, const char *type, const char *devicename, unsigned int *qdevid)) {
+    size_t i;
+    char foobar[64];
+
+    for (i = 0; i < countof(gamepaddevices); i++) {
+        Q_snprintfz(foobar, sizeof(foobar), "gp%i", (int)i);
+        callback(ctx, "gamepad", foobar, &gamepaddevices[i].id);
+    }
+
+    for (i = 0; i < countof(mouseid); i++) {
+        Q_snprintfz(foobar, sizeof(foobar), "m%i", (int)i);
+        callback(ctx, "mouse", foobar, &mouseid[i]);
+    }
+
+    for (i = 0; i < countof(keyboardid); i++) {
+        Q_snprintfz(foobar, sizeof(foobar), "kb%i", (int)i);
+        callback(ctx, "keyboard", foobar, &keyboardid[i]);
+    }
+}
+
+enum controllertype_e INS_GetControllerType(int id) {
+    size_t i;
+    for (i = 0; i < countof(gamepaddevices); i++) {
+        if (id == gamepaddevices[i].id)
+            return CONTROLLER_UNKNOWN; // Use generic glyphs for gamepads
+    }
+    return CONTROLLER_NONE; // No controller detected
+}
+
+void INS_Rumble(int joy, quint16_t amp_low, quint16_t amp_high, quint32_t duration) {
+}
+
+void INS_RumbleTriggers(int joy, quint16_t left, quint16_t right, quint32_t duration) {
+}
+
+void INS_SetLEDColor(int id, vec3_t color) {
+}
+
+void INS_SetTriggerFX(int id, const void *data, size_t size) {
+}
