@@ -31,22 +31,31 @@
       width: 100%;
       height: 100%;
       position: absolute;
-      z-index: 1; /* Canvas fica atrás do joystick */
+      z-index: 1;
     }
 
-    #joystick {
+    /* Joystick Container */
+    .joystick-container {
       position: absolute;
-      bottom: 10%; /* Posiciona no canto inferior esquerdo */
+      bottom: 10%;
       left: 10%;
-      width: 120px;
-      height: 120px;
+      width: 150px;
+      height: 150px;
+      z-index: 100; /* Sempre acima do canvas */
+      pointer-events: auto;
+    }
+
+    /* Joystick Base */
+    .joystick-base {
+      position: relative;
+      width: 100%;
+      height: 100%;
       background: rgba(255, 255, 255, 0.2);
       border-radius: 50%;
-      z-index: 10; /* Joystick acima do canvas */
-      touch-action: none;
     }
 
-    #joystick-handle {
+    /* Joystick Handle */
+    .joystick-handle {
       position: absolute;
       width: 60px;
       height: 60px;
@@ -62,78 +71,23 @@
   <div id="status">Loading...</div>
   <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
   
-  <!-- Joystick elements -->
-  <div id="joystick">
-    <div id="joystick-handle"></div>
+  <!-- Joystick Container -->
+  <div class="joystick-container" id="joystick">
+    <div class="joystick-base">
+      <div class="joystick-handle" id="joystick-handle"></div>
+    </div>
   </div>
 
   <script type="text/javascript">
-    var Module = {
-      files: {},
-      autostart: true,
-      print: function(msg) { console.log(msg); },
-      printErr: function(text) { console.error(text); },
-      canvas: document.getElementById('canvas'),
-      setStatus: function(text) {
-        var statusElement = document.getElementById('status');
-        if (text) {
-          statusElement.innerHTML = text;
-          statusElement.style.visibility = 'visible';
-        } else {
-          statusElement.style.visibility = 'hidden';
-        }
-      },
-      postRun: [
-        function() {
-          console.log("Engine initialized successfully.");
-          Module.setStatus("");
-        }
-      ]
-    };
-
-    function adjustCanvasSize() {
-      var canvas = document.getElementById('canvas');
-      var width = window.innerWidth;
-      var height = window.innerHeight;
-
-      canvas.width = width * window.devicePixelRatio;
-      canvas.height = height * window.devicePixelRatio;
-      canvas.style.width = width + 'px';
-      canvas.style.height = height + 'px';
-    }
-
-    window.addEventListener('resize', adjustCanvasSize);
-    adjustCanvasSize();
-
-    function begin() {
-      if (Module.began) return;
-      Module.began = true;
-      Module.setStatus('Downloading...');
-
-      var script = document.createElement('script');
-      script.setAttribute('src', "ftewebgl.js");
-      script.setAttribute('type', "text/javascript");
-      script.setAttribute('charset', "utf-8");
-      script.addEventListener('error', function() {
-        alert("Error downloading engine script.");
-        Module.setStatus("Unable to download engine JavaScript");
-      }, false);
-      document.head.appendChild(script);
-    }
-
-    if (Module.autostart) {
-      begin();
-    }
-
-    // Joystick functionality
+    // Joystick Initialization
     const joystick = document.getElementById('joystick');
     const handle = document.getElementById('joystick-handle');
+    const joystickContainer = joystick.parentNode;
     const joystickCenter = { x: 0, y: 0 };
     const maxDistance = joystick.offsetWidth / 2 - handle.offsetWidth / 2;
 
     let pressedKeys = {};
 
-    // Virtual keypress simulation
     function simulateKey(key, isPressed) {
       if (isPressed && !pressedKeys[key]) {
         pressedKeys[key] = true;
@@ -144,47 +98,39 @@
       }
     }
 
-    // Handle joystick movement
     function handleJoystickMovement(x, y) {
-      // Map joystick positions to WASD keys
       simulateKey('w', y < -20);
       simulateKey('s', y > 20);
       simulateKey('a', x < -20);
       simulateKey('d', x > 20);
-
-      // Map joystick positions to arrow keys
-      simulateKey('ArrowUp', y < -20);
-      simulateKey('ArrowDown', y > 20);
     }
 
-    // Joystick touch/mouse events
-    joystick.addEventListener('mousedown', onStart, false);
-    joystick.addEventListener('touchstart', onStart, false);
+    joystick.addEventListener('mousedown', startJoystick, false);
+    joystick.addEventListener('touchstart', startJoystick, false);
 
-    function onStart(e) {
-      e.preventDefault();
-      e.stopPropagation();
+    function startJoystick(event) {
+      event.preventDefault();
 
       const rect = joystick.getBoundingClientRect();
       joystickCenter.x = rect.left + rect.width / 2;
       joystickCenter.y = rect.top + rect.height / 2;
 
-      const moveHandler = onMove.bind(null, e.type === 'touchstart');
-      const endHandler = onEnd.bind(null, moveHandler);
+      const moveHandler = moveJoystick.bind(null, event.type === 'touchstart');
+      const endHandler = stopJoystick.bind(null, moveHandler);
 
-      document.addEventListener(e.type === 'touchstart' ? 'touchmove' : 'mousemove', moveHandler, false);
-      document.addEventListener(e.type === 'touchstart' ? 'touchend' : 'mouseup', endHandler, false);
+      document.addEventListener(event.type === 'touchstart' ? 'touchmove' : 'mousemove', moveHandler, false);
+      document.addEventListener(event.type === 'touchstart' ? 'touchend' : 'mouseup', endHandler, false);
     }
 
-    function onMove(isTouch, e) {
-      const clientX = isTouch ? e.touches[0].clientX : e.clientX;
-      const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+    function moveJoystick(isTouch, event) {
+      const clientX = isTouch ? event.touches[0].clientX : event.clientX;
+      const clientY = isTouch ? event.touches[0].clientY : event.clientY;
 
       const deltaX = clientX - joystickCenter.x;
       const deltaY = clientY - joystickCenter.y;
       const distance = Math.min(maxDistance, Math.sqrt(deltaX ** 2 + deltaY ** 2));
-
       const angle = Math.atan2(deltaY, deltaX);
+
       const x = Math.cos(angle) * distance;
       const y = Math.sin(angle) * distance;
 
@@ -192,18 +138,32 @@
       handleJoystickMovement(x, y);
     }
 
-    function onEnd(moveHandler, e) {
-      e.preventDefault();
-      e.stopPropagation();
-
+    function stopJoystick(moveHandler, event) {
       document.removeEventListener('mousemove', moveHandler, false);
-      document.removeEventListener('mouseup', onEnd, false);
+      document.removeEventListener('mouseup', stopJoystick, false);
       document.removeEventListener('touchmove', moveHandler, false);
-      document.removeEventListener('touchend', onEnd, false);
+      document.removeEventListener('touchend', stopJoystick, false);
 
       handle.style.transform = 'translate(-50%, -50%)';
-      handleJoystickMovement(0, 0); // Reset movement
+      handleJoystickMovement(0, 0);
     }
+
+    // FTE Engine Initialization
+    var Module = {
+      canvas: document.getElementById('canvas'),
+      autostart: true,
+      print: (msg) => console.log(msg),
+      printErr: (err) => console.error(err),
+    };
+
+    function adjustCanvasSize() {
+      const canvas = document.getElementById('canvas');
+      canvas.width = window.innerWidth * window.devicePixelRatio;
+      canvas.height = window.innerHeight * window.devicePixelRatio;
+    }
+
+    window.addEventListener('resize', adjustCanvasSize);
+    adjustCanvasSize();
   </script>
 </body>
 </html>
